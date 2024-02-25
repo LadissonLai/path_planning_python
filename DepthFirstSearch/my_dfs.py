@@ -4,12 +4,15 @@ Depth-First grid planning
 
 See Wikipedia article (https://en.wikipedia.org/wiki/Depth-first_search)
 
+自己实现一下
+
 """
 
 import math
 import matplotlib.pyplot as plt
 
 show_animation = True
+
 
 class DepthFirstSearchPlanner:
 
@@ -25,7 +28,7 @@ class DepthFirstSearchPlanner:
 
         self.reso = reso
         self.rr = rr
-        self.calc_obstacle_map(ox, oy)
+        self.calc_obstacle_map(ox, oy)  # 转化为统一的抽象地图，以适配不同的地图分辨率
         self.motion = self.get_motion_model()
 
     class Node:
@@ -33,7 +36,7 @@ class DepthFirstSearchPlanner:
             self.x = x  # index of grid
             self.y = y  # index of grid
             self.cost = cost
-            self.parent_index = parent_index
+            self.parent_index = parent_index  # 作为dict的键，方便查询是否存在
             self.parent = parent
 
         def __str__(self):
@@ -54,23 +57,23 @@ class DepthFirstSearchPlanner:
             rx: x position list of the final path
             ry: y position list of the final path
         """
-
-        nstart = self.Node(self.calc_xyindex(sx, self.minx),
-                           self.calc_xyindex(sy, self.miny), 0.0, -1, None)
-        ngoal = self.Node(self.calc_xyindex(gx, self.minx),
+        snode = self.Node(self.calc_xyindex(sx, self.minx),
+                          self.calc_xyindex(sy, self.miny), 0.0, -1, None)
+        gnode = self.Node(self.calc_xyindex(gx, self.minx),
                           self.calc_xyindex(gy, self.miny), 0.0, -1, None)
-
-        open_set, closed_set = dict(), dict()
-        open_set[self.calc_grid_index(nstart)] = nstart
+        open_set = dict()
+        closed_set = dict()
+        open_set[self.calc_grid_index(snode)] = snode
 
         while True:
-            if len(open_set) == 0:
-                print("Open set is empty..")
-                break
 
-            current = open_set.pop(list(open_set.keys())[-1])# 他妈的这个字典是有序的
+            if len(open_set) == 0:
+                print("Cannot find path")
+                exit(0)
+            current = open_set.pop(list(open_set.keys())[-1])  # 将open_set作为栈使用
             c_id = self.calc_grid_index(current)
 
+            # 绘图
             # show graph
             if show_animation:  # pragma: no cover
                 plt.plot(self.calc_grid_position(current.x, self.minx),
@@ -81,43 +84,42 @@ class DepthFirstSearchPlanner:
                                              [exit(0) if event.key == 'escape'
                                               else None])
                 plt.pause(0.01)
-                # plt.pause(3)
 
-            if current.x == ngoal.x and current.y == ngoal.y:
-                print("Find goal")
-                ngoal.parent_index = current.parent_index
-                ngoal.cost = current.cost
+            # current是否为到达终点
+            if current.x == gnode.x and current.y == gnode.y:
+                gnode.parent_index = current.parent_index
+                gnode.parent = current.parent
+                gnode.cost = current.cost
                 break
 
-            # expand_grid search grid based on motion model
+            # 遍历邻居节点
             for i, _ in enumerate(self.motion):
-                node = self.Node(current.x + self.motion[i][0],
-                                 current.y + self.motion[i][1],
-                                 current.cost + self.motion[i][2], c_id, None)
-                n_id = self.calc_grid_index(node)
-
-                # If the node is not safe, do nothing
-                if not self.verify_node(node):
+                neighbor = self.Node(current.x + self.motion[i][0],
+                                     current.y + self.motion[i][1],
+                                     current.cost + self.motion[i][2],
+                                     c_id, None)
+                n_id = self.calc_grid_index(neighbor)
+                # 判断是否越界和碰撞
+                if not self.verify_node(neighbor):
                     continue
 
                 if n_id not in closed_set:
-                    open_set[n_id] = node
-                    closed_set[n_id] = node
-                    node.parent = current
+                    open_set[n_id] = neighbor
+                    closed_set[n_id] = neighbor
+                    neighbor.parent = current
 
-        rx, ry = self.calc_final_path(ngoal, closed_set)
+        rx, ry = self.calc_final_path(gnode, closed_set)
         return rx, ry
 
-    def calc_final_path(self, ngoal, closedset):
-        # generate final course
-        rx, ry = [self.calc_grid_position(ngoal.x, self.minx)], [
-            self.calc_grid_position(ngoal.y, self.miny)]
-        n = closedset[ngoal.parent_index]
+    def calc_final_path(self, gnode, closedset):
+        # 回溯路径
+        rx, ry = [self.calc_grid_position(gnode.x, self.minx)], [
+            self.calc_grid_position(gnode.y, self.miny)]
+        n = gnode.parent
         while n is not None:
             rx.append(self.calc_grid_position(n.x, self.minx))
             ry.append(self.calc_grid_position(n.y, self.miny))
             n = n.parent
-
         return rx, ry
 
     def calc_grid_position(self, index, minp):
@@ -132,32 +134,37 @@ class DepthFirstSearchPlanner:
         return pos
 
     def calc_xyindex(self, position, min_pos):
-        return round((position - min_pos) / self.reso)
+        """将实际地图坐标转换到抽象地图的坐标系下
+        """
+        pos = round((position - min_pos) / self.reso)
+        return pos
 
     def calc_grid_index(self, node):
-        return (node.y - self.miny) * self.xwidth + (node.x - self.minx)
+        """
+        这个原点是随机取出来的, 只要保证计算所有node的index是唯一即可
+        """
+        originx = -1
+        originy = -1
+        index = (node.y - originy) * self.xwidth + node.x - originx
+        return index
 
     def verify_node(self, node):
-        px = self.calc_grid_position(node.x, self.minx)
-        py = self.calc_grid_position(node.y, self.miny)
-
-        if px < self.minx:
+        """
+            检查是否越界和是否为障碍物
+        """
+        if node.x < 0 or node.x >= self.xwidth:
             return False
-        elif py < self.miny:
+        if node.y < 0 or node.y >= self.ywidth:
             return False
-        elif px >= self.maxx:
-            return False
-        elif py >= self.maxy:
-            return False
-
         # collision check
         if self.obmap[node.x][node.y]:
             return False
-
         return True
 
     def calc_obstacle_map(self, ox, oy):
-
+        """
+            计算抽象的地图,用来规划
+        """
         self.minx = round(min(ox))
         self.miny = round(min(oy))
         self.maxx = round(max(ox))
@@ -185,21 +192,22 @@ class DepthFirstSearchPlanner:
                         self.obmap[ix][iy] = True
                         break
 
-    @staticmethod
-    def get_motion_model():
-        # dx, dy, cost
-        motion = [[1, 0, 1],
-                  [0, 1, 1],
-                  [-1, 0, 1],
-                  [0, -1, 1],
-                  [-1, -1, math.sqrt(2)],
-                  [-1, 1, math.sqrt(2)],
-                  [1, -1, math.sqrt(2)],
-                  [1, 1, math.sqrt(2)]]
-
+    def get_motion_model(self):
+        # dx, dy, cost,逆时针8个点，作为邻居
+        motion = [
+            [0, 1, 1],
+            [-1, 1, math.sqrt(2)],
+            [-1, 0, 1],
+            [-1, -1, math.sqrt(2)],
+            [0, -1, 1],
+            [1, -1, math.sqrt(2)],
+            [1, 1, math.sqrt(2)],
+            [1, 0, 1]
+        ]
         return motion
 
-def generate_map(difficult = True):
+
+def generate_map(difficult=True):
     # set obstacle positions
     ox, oy = [], []
     for i in range(-10, 60):
@@ -222,6 +230,8 @@ def generate_map(difficult = True):
         oy.append(60.0 - i)
 
     return ox, oy
+
+
 def main():
     print(__file__ + " start!!")
 
@@ -229,13 +239,12 @@ def main():
     sx = 10.0  # [m]
     sy = 10.0  # [m]
     gx = 50.0  # [m]
-    # gx = 5.0  # [m]
     gy = 50.0  # [m]
     grid_size = 2.0  # [m]
     robot_radius = 1.0  # [m]
 
-    # set obstacle positions
-    ox,oy = generate_map()
+    # generate obstacle map
+    ox, oy = generate_map()
 
     if show_animation:  # pragma: no cover
         plt.plot(ox, oy, ".k")
