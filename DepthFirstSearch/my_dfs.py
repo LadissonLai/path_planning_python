@@ -64,6 +64,7 @@ class DepthFirstSearchPlanner:
         open_set = dict()
         closed_set = dict()
         open_set[self.calc_grid_index(snode)] = snode
+        closed_set[self.calc_grid_index(snode)] = snode
 
         while True:
 
@@ -73,7 +74,6 @@ class DepthFirstSearchPlanner:
             current = open_set.pop(list(open_set.keys())[-1])  # 将open_set作为栈使用
             c_id = self.calc_grid_index(current)
 
-            # 绘图
             # show graph
             if show_animation:  # pragma: no cover
                 plt.plot(self.calc_grid_position(current.x, self.minx),
