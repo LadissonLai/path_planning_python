@@ -77,10 +77,7 @@ class AStarPlanner:
                 break
 
             c_id = min(
-                open_set,
-                key=lambda o: open_set[o].cost + self.calc_heuristic(goal_node,
-                                                                     open_set[
-                                                                         o]))
+                open_set, key=lambda o: open_set[o].cost + self.calc_heuristic(goal_node, open_set[o]))
             current = open_set[c_id]
             # Remove the item from the open set
             del open_set[c_id]
@@ -112,16 +109,17 @@ class AStarPlanner:
                 # If the node is not safe, do nothing
                 if not self.verify_node(node):
                     continue
-                
+
                 if n_id in open_set:
                     if open_set[n_id].cost > node.cost:
                         open_set[n_id].cost = node.cost
-                        open_set[n_id].parent_index = self.calc_grid_index(current)
+                        open_set[n_id].parent_index = self.calc_grid_index(
+                            current)
                         continue
 
                 if n_id not in closed_set:
                     open_set[n_id] = node
-                    closed_set[n_id]=node
+                    closed_set[n_id] = node
                     node.parent_index = c_id
 
         rx, ry = self.calc_final_path(goal_node, closed_set)
